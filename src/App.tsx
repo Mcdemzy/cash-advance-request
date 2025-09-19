@@ -8,6 +8,9 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import FinanceDashboard from "./pages/finance/FinanceDashboard";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import NewRequest from "./pages/dashboard/NewRequest";
+import AllRequests from "./pages/dashboard/AllRequests";
+import Retirement from "./pages/dashboard/Retirement";
 
 const App = () => {
   return (
@@ -24,6 +27,30 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/request"
+            element={
+              <ProtectedRoute>
+                <NewRequest />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/requests"
+            element={
+              <ProtectedRoute>
+                <AllRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/retirement"
+            element={
+              <ProtectedRoute>
+                <Retirement />
               </ProtectedRoute>
             }
           />
