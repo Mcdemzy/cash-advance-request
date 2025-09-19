@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { authService } from "../../services/auth";
-import { requestService } from "../../services/requests";
+// import { requestService } from "../../services/requests";
 
 interface CashAdvanceRequest {
   id: string;
@@ -31,7 +31,10 @@ interface CashAdvanceRequest {
 const StaffDashboard = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
-  const [requests, setRequests] = useState<CashAdvanceRequest[]>([]);
+  const [
+    requests,
+    // setRequests
+  ] = useState<CashAdvanceRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // const [activeTab, setActiveTab] = useState("overview");
@@ -49,8 +52,8 @@ const StaffDashboard = () => {
     try {
       setIsLoading(true);
       // This would be an API call in a real application
-      const userRequests = await requestService.getUserRequests(user?._id);
-      setRequests(userRequests);
+      // const userRequests = await requestService.getUserRequests(user?.id);
+      // setRequests(userRequests);
     } catch (error) {
       console.error("Error fetching requests:", error);
     } finally {
