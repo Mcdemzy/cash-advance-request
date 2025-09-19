@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import { authService } from "../../services/auth";
-// import { requestService } from "../../services/requests";
 
 interface CashAdvanceRequest {
   id: string;
@@ -31,13 +30,9 @@ interface CashAdvanceRequest {
 const StaffDashboard = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
-  const [
-    requests,
-    // setRequests
-  ] = useState<CashAdvanceRequest[]>([]);
+  const [requests] = useState<CashAdvanceRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  // const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     if (user?.role !== "staff") {
@@ -45,21 +40,13 @@ const StaffDashboard = () => {
       return;
     }
 
-    fetchUserRequests();
-  }, [user, navigate]);
-
-  const fetchUserRequests = async () => {
-    try {
-      setIsLoading(true);
-      // This would be an API call in a real application
-      // const userRequests = await requestService.getUserRequests(user?.id);
-      // setRequests(userRequests);
-    } catch (error) {
-      console.error("Error fetching requests:", error);
-    } finally {
+    // Simulate loading delay
+    const timer = setTimeout(() => {
       setIsLoading(false);
-    }
-  };
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [user, navigate]);
 
   const handleLogout = () => {
     authService.logout();
