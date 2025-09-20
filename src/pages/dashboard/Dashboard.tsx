@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PlusCircle,
@@ -14,25 +14,42 @@ import {
   X,
 } from "lucide-react";
 import { authService } from "../../services/auth";
-
-interface CashAdvanceRequest {
-  id: string;
-  amount: number;
-  purpose: string;
-  status: "pending" | "approved" | "rejected" | "disbursed" | "retired";
-  submittedDate: string;
-  approvedDate?: string;
-  disbursedDate?: string;
-  retiredDate?: string;
-  approverComments?: string;
-}
+import { requestService } from "../../services/requests";
+import type { CashAdvanceRequest } from "../../services/requests";
 
 const StaffDashboard = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
-  const [requests] = useState<CashAdvanceRequest[]>([]);
+  const [requests, setRequests] = useState<CashAdvanceRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [stats, setStats] = useState({
+    totalRequests: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    retired: 0,
+    totalAmount: 0,
+  });
+
+  // Memoize the loadData function to prevent unnecessary recreations
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+
+      // Load dashboard stats
+      const statsData = await requestService.getDashboardStats();
+      setStats(statsData);
+
+      // Load recent requests
+      const recentRequests = await requestService.getRecentRequests();
+      setRequests(recentRequests);
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // Empty dependency array since this function doesn't depend on any props or state
 
   useEffect(() => {
     if (user?.role !== "staff") {
@@ -40,13 +57,8 @@ const StaffDashboard = () => {
       return;
     }
 
-    // Simulate loading delay
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [user, navigate]);
+    loadData();
+  }, [user?.role, loadData]); // Remove navigate from dependencies and use user?.role instead
 
   const handleLogout = () => {
     authService.logout();
@@ -59,6 +71,8 @@ const StaffDashboard = () => {
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "rejected":
         return <XCircle className="h-5 w-5 text-red-500" />;
+      case "retired":
+        return <CheckCircle className="h-5 w-5 text-purple-500" />;
       default:
         return <Clock className="h-5 w-5 text-yellow-500" />;
     }
@@ -70,24 +84,11 @@ const StaffDashboard = () => {
         return "bg-green-100 text-green-800";
       case "rejected":
         return "bg-red-100 text-red-800";
-      case "disbursed":
-        return "bg-blue-100 text-blue-800";
       case "retired":
         return "bg-purple-100 text-purple-800";
       default:
         return "bg-yellow-100 text-yellow-800";
     }
-  };
-
-  // Calculate statistics for the dashboard
-  const stats = {
-    totalRequests: requests.length,
-    pending: requests.filter((r) => r.status === "pending").length,
-    approved: requests.filter(
-      (r) => r.status === "approved" || r.status === "disbursed"
-    ).length,
-    retired: requests.filter((r) => r.status === "retired").length,
-    totalAmount: requests.reduce((sum, req) => sum + req.amount, 0),
   };
 
   const pendingRequests = requests.filter((req) => req.status === "pending");
@@ -237,7 +238,7 @@ const StaffDashboard = () => {
                     Retire Advance
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Submit retirement documents
+                    Submit retirement information
                   </p>
                 </div>
               </div>
@@ -355,7 +356,7 @@ const StaffDashboard = () => {
                                 <p className="text-sm text-gray-500">
                                   Submitted on{" "}
                                   {new Date(
-                                    request.submittedDate
+                                    request.createdAt
                                   ).toLocaleDateString()}
                                 </p>
                               </div>

@@ -2,33 +2,21 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Upload,
-  FileText,
-
   DollarSign,
   Calendar,
 } from "lucide-react";
 import { requestService } from "../../services/requests";
-
-interface AdvanceForRetirement {
-  id: string;
-  purpose: string;
-  amount: number;
-  disbursedDate: string;
-  retired: boolean;
-}
+import type { AdvanceForRetirement } from "../../services/requests";
 
 const Retirement = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [advances, setAdvances] = useState<AdvanceForRetirement[]>([]);
-  // const [selectedAdvance, setSelectedAdvance] = useState<string>("");
   const [formData, setFormData] = useState({
     advanceId: "",
     retirementDate: new Date().toISOString().split("T")[0],
     totalExpenses: "",
-    description: "",
-    receipts: [] as File[],
+    expenseBreakdown: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -64,21 +52,6 @@ const Retirement = () => {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setFormData((prev) => ({
-      ...prev,
-      receipts: [...prev.receipts, ...files],
-    }));
-  };
-
-  const removeFile = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      receipts: prev.receipts.filter((_, i) => i !== index),
-    }));
-  };
-
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -89,10 +62,8 @@ const Retirement = () => {
     if (!formData.totalExpenses || Number(formData.totalExpenses) <= 0) {
       newErrors.totalExpenses = "Valid expense amount is required";
     }
-    if (!formData.description.trim())
-      newErrors.description = "Description is required";
-    if (formData.receipts.length === 0)
-      newErrors.receipts = "At least one receipt is required";
+    if (!formData.expenseBreakdown.trim())
+      newErrors.expenseBreakdown = "Expense breakdown is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -105,7 +76,13 @@ const Retirement = () => {
 
     setIsSubmitting(true);
     try {
-      await requestService.submitRetirement(formData);
+      const retirementData = {
+        retirementDate: formData.retirementDate,
+        totalExpenses: Number(formData.totalExpenses),
+        expenseBreakdown: formData.expenseBreakdown,
+      };
+
+      await requestService.retireAdvance(formData.advanceId, retirementData);
       navigate("/dashboard/requests", {
         state: { message: "Advance retirement submitted successfully!" },
       });
@@ -178,7 +155,7 @@ const Retirement = () => {
                 {advances.map((advance) => (
                   <option key={advance.id} value={advance.id}>
                     {advance.purpose} - {formatCurrency(advance.amount)}{" "}
-                    (Disbursed: {formatDate(advance.disbursedDate)})
+                    (Needed by: {formatDate(advance.dateNeeded)})
                   </option>
                 ))}
               </select>
@@ -256,96 +233,29 @@ const Retirement = () => {
               </div>
             </div>
 
-            {/* Description */}
+            {/* Expense Breakdown */}
             <div>
               <label
-                htmlFor="description"
+                htmlFor="expenseBreakdown"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
                 Expense Breakdown *
               </label>
               <textarea
-                id="description"
-                name="description"
-                value={formData.description}
+                id="expenseBreakdown"
+                name="expenseBreakdown"
+                value={formData.expenseBreakdown}
                 onChange={handleInputChange}
                 rows={4}
                 className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.description ? "border-red-300" : "border-gray-300"
+                  errors.expenseBreakdown ? "border-red-300" : "border-gray-300"
                 }`}
                 placeholder="Provide a detailed breakdown of how the advance was used..."
               />
-              {errors.description && (
+              {errors.expenseBreakdown && (
                 <p className="mt-1 text-sm text-red-600">
-                  {errors.description}
+                  {errors.expenseBreakdown}
                 </p>
-              )}
-            </div>
-
-            {/* Receipts */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Receipts *
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                <div className="space-y-1 text-center">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="flex text-sm text-gray-600">
-                    <label
-                      htmlFor="receipts"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500"
-                    >
-                      <span>Upload receipts</span>
-                      <input
-                        id="receipts"
-                        name="receipts"
-                        type="file"
-                        multiple
-                        onChange={handleFileChange}
-                        className="sr-only"
-                        accept=".jpg,.jpeg,.png,.pdf"
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    JPG, PNG, PDF up to 10MB each
-                  </p>
-                </div>
-              </div>
-              {errors.receipts && (
-                <p className="mt-1 text-sm text-red-600">{errors.receipts}</p>
-              )}
-
-              {/* File list */}
-              {formData.receipts.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
-                    Uploaded receipts:
-                  </h4>
-                  <ul className="space-y-2">
-                    {formData.receipts.map((file, index) => (
-                      <li
-                        key={index}
-                        className="flex items-center justify-between bg-gray-50 p-2 rounded-md"
-                      >
-                        <div className="flex items-center">
-                          <FileText className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-sm text-gray-600 truncate">
-                            {file.name}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(index)}
-                          className="text-red-500 hover:text-red-700 text-sm cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               )}
             </div>
 
@@ -375,9 +285,9 @@ const Retirement = () => {
             Important Information
           </h3>
           <ul className="text-sm text-blue-600 space-y-1">
-            <li>• Submit retirement within 30 days of advance disbursement</li>
+            <li>• Submit retirement within 30 days of advance approval</li>
             <li>
-              • Include all original receipts and supporting documentation
+              • Provide detailed breakdown of all expenses
             </li>
             <li>
               • Any unspent funds must be returned with the retirement

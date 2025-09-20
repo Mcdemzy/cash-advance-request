@@ -2,12 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Upload,
-  FileText,
   DollarSign,
   Calendar,
 } from "lucide-react";
 import { requestService } from "../../services/requests";
+import type { CreateRequestData } from "../../services/requests";
 
 const NewRequest = () => {
   const navigate = useNavigate();
@@ -15,9 +14,9 @@ const NewRequest = () => {
   const [formData, setFormData] = useState({
     purpose: "",
     amount: "",
-    neededBy: "",
+    dateNeeded: "",
     description: "",
-    attachments: [] as File[],
+    priority: "medium" as "low" | "medium" | "high" | "urgent",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -40,28 +39,13 @@ const NewRequest = () => {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setFormData((prev) => ({
-      ...prev,
-      attachments: [...prev.attachments, ...files],
-    }));
-  };
-
-  const removeFile = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      attachments: prev.attachments.filter((_, i) => i !== index),
-    }));
-  };
-
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.purpose.trim()) newErrors.purpose = "Purpose is required";
     if (!formData.amount || Number(formData.amount) <= 0)
       newErrors.amount = "Valid amount is required";
-    if (!formData.neededBy) newErrors.neededBy = "Date needed is required";
+    if (!formData.dateNeeded) newErrors.dateNeeded = "Date needed is required";
     if (!formData.description.trim())
       newErrors.description = "Description is required";
 
@@ -77,11 +61,12 @@ const NewRequest = () => {
     setIsSubmitting(true);
     try {
       // Convert form data to match the expected interface
-      const requestData = {
+      const requestData: CreateRequestData = {
         purpose: formData.purpose,
         description: formData.description,
-        amount: Number(formData.amount), // Convert string to number
-        documents: formData.attachments,
+        amount: Number(formData.amount),
+        dateNeeded: formData.dateNeeded,
+        priority: formData.priority,
       };
 
       await requestService.createRequest(requestData);
@@ -149,8 +134,8 @@ const NewRequest = () => {
               )}
             </div>
 
-            {/* Amount and Date */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Amount, Date, and Priority */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label
                   htmlFor="amount"
@@ -183,7 +168,7 @@ const NewRequest = () => {
 
               <div>
                 <label
-                  htmlFor="neededBy"
+                  htmlFor="dateNeeded"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
                   Date Needed By *
@@ -194,19 +179,40 @@ const NewRequest = () => {
                   </div>
                   <input
                     type="date"
-                    id="neededBy"
-                    name="neededBy"
-                    value={formData.neededBy}
+                    id="dateNeeded"
+                    name="dateNeeded"
+                    value={formData.dateNeeded}
                     onChange={handleInputChange}
                     min={new Date().toISOString().split("T")[0]}
                     className={`pl-10 w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.neededBy ? "border-red-300" : "border-gray-300"
+                      errors.dateNeeded ? "border-red-300" : "border-gray-300"
                     }`}
                   />
                 </div>
-                {errors.neededBy && (
-                  <p className="mt-1 text-sm text-red-600">{errors.neededBy}</p>
+                {errors.dateNeeded && (
+                  <p className="mt-1 text-sm text-red-600">{errors.dateNeeded}</p>
                 )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="priority"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Priority
+                </label>
+                <select
+                  id="priority"
+                  name="priority"
+                  value={formData.priority}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
               </div>
             </div>
 
@@ -233,69 +239,6 @@ const NewRequest = () => {
                 <p className="mt-1 text-sm text-red-600">
                   {errors.description}
                 </p>
-              )}
-            </div>
-
-            {/* Attachments */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Supporting Documents (Optional)
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                <div className="space-y-1 text-center">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="flex text-sm text-gray-600">
-                    <label
-                      htmlFor="attachments"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500"
-                    >
-                      <span>Upload files</span>
-                      <input
-                        id="attachments"
-                        name="attachments"
-                        type="file"
-                        multiple
-                        onChange={handleFileChange}
-                        className="sr-only"
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    PDF, DOC, DOCX, JPG, PNG up to 10MB
-                  </p>
-                </div>
-              </div>
-
-              {/* File list */}
-              {formData.attachments.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
-                    Attached files:
-                  </h4>
-                  <ul className="space-y-2">
-                    {formData.attachments.map((file, index) => (
-                      <li
-                        key={index}
-                        className="flex items-center justify-between bg-gray-50 p-2 rounded-md"
-                      >
-                        <div className="flex items-center">
-                          <FileText className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-sm text-gray-600 truncate">
-                            {file.name}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(index)}
-                          className="text-red-500 hover:text-red-700 text-sm cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               )}
             </div>
 

@@ -14,7 +14,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { requestService } from "../../services/requests";
-import type { CashAdvanceRequest } from "../../types/types";
+import type { CashAdvanceRequest } from "../../services/requests";
 
 const AllRequests = () => {
   const navigate = useNavigate();
@@ -42,8 +42,8 @@ const AllRequests = () => {
   const fetchRequests = async () => {
     try {
       setIsLoading(true);
-      const userRequests = await requestService.getUserRequests();
-      setRequests(userRequests);
+      const response = await requestService.getUserRequests();
+      setRequests(response.advances);
     } catch (error) {
       console.error("Error fetching requests:", error);
     } finally {
@@ -74,8 +74,8 @@ const AllRequests = () => {
           break;
         case "date":
         default:
-          aValue = new Date(a.submittedDate).getTime();
-          bValue = new Date(b.submittedDate).getTime();
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
       }
 
       if (sortOrder === "asc") {
@@ -91,8 +91,6 @@ const AllRequests = () => {
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "rejected":
         return <XCircle className="h-5 w-5 text-red-500" />;
-      case "disbursed":
-        return <CheckCircle className="h-5 w-5 text-blue-500" />;
       case "retired":
         return <CheckCircle className="h-5 w-5 text-purple-500" />;
       default:
@@ -106,8 +104,6 @@ const AllRequests = () => {
         return "bg-green-100 text-green-800";
       case "rejected":
         return "bg-red-100 text-red-800";
-      case "disbursed":
-        return "bg-blue-100 text-blue-800";
       case "retired":
         return "bg-purple-100 text-purple-800";
       default:
@@ -202,7 +198,6 @@ const AllRequests = () => {
                 <option value="pending">Pending</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
-                <option value="disbursed">Disbursed</option>
                 <option value="retired">Retired</option>
               </select>
 
@@ -307,7 +302,7 @@ const AllRequests = () => {
                         {formatCurrency(request.amount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(request.submittedDate)}
+                        {formatDate(request.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
