@@ -3,26 +3,33 @@ import api from "./api";
 export interface CashAdvanceRequest {
   _id: string;
   id: string; // For compatibility with existing code
-  userId: string;
-  employeeId: string;
+  user: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    employeeId: string;
+    department?: string;
+    position?: string;
+  };
+  amount: number;
   purpose: string;
   description: string;
-  amount: number;
-  status: "pending" | "approved" | "rejected" | "disbursed" | "retired";
-  submittedDate: string;
-  approvedDate?: string;
-  disbursedDate?: string;
-  retiredDate?: string;
-  approverComments?: string;
-  approvedBy?: string;
-  rejectedBy?: string;
-  documents?: string[];
-  retirementDetails?: {
+  status: "pending" | "approved" | "rejected" | "retired";
+  priority: "low" | "medium" | "high" | "urgent";
+  dateNeeded: string;
+  retirement?: {
     retirementDate: string;
     totalExpenses: number;
-    description: string;
-    receipts: string[];
+    expenseBreakdown: string;
+    retiredAt: string;
   };
+  approvedBy?: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  rejectedReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,52 +38,101 @@ export interface CreateRequestData {
   purpose: string;
   description: string;
   amount: number;
-  documents?: File[];
+  dateNeeded: string;
+  priority?: "low" | "medium" | "high" | "urgent";
 }
 
 export interface RetirementData {
-  advanceId: string;
   retirementDate: string;
-  totalExpenses: string;
-  description: string;
-  receipts: File[];
+  totalExpenses: number;
+  expenseBreakdown: string;
 }
 
 export interface AdvanceForRetirement {
-  id: string;
   _id: string;
+  id: string;
   purpose: string;
   amount: number;
-  disbursedDate: string;
-  retired: boolean;
+  dateNeeded: string;
+  status: "approved";
 }
 
 export interface RequestsResponse {
   success: boolean;
   message: string;
-  data: CashAdvanceRequest[];
+  data: {
+    advances: CashAdvanceRequest[];
+    pagination?: {
+      currentPage: number;
+      totalPages: number;
+      totalAdvances: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+  };
 }
 
 export interface RequestResponse {
   success: boolean;
   message: string;
-  data: CashAdvanceRequest;
+  data: {
+    advance: CashAdvanceRequest;
+  };
+}
+
+export interface StatsResponse {
+  success: boolean;
+  data: {
+    stats: {
+      totalRequests: number;
+      pending: number;
+      approved: number;
+      rejected: number;
+      retired: number;
+      totalAmount: number;
+    };
+  };
+}
+
+export interface RecentRequestsResponse {
+  success: boolean;
+  data: {
+    advances: CashAdvanceRequest[];
+  };
 }
 
 export const requestService = {
-  // Get all user requests
-  async getUserRequests(userId?: string): Promise<CashAdvanceRequest[]> {
+  // Get all user requests with pagination and filtering
+  async getUserRequests(params?: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    sort?: string;
+  }): Promise<{
+    advances: CashAdvanceRequest[];
+    pagination?: {
+      currentPage: number;
+      totalPages: number;
+      totalAdvances: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+  }> {
     try {
-      const endpoint = userId ? `/requests/user/${userId}` : "/requests/user";
-      const response = await api.get<RequestsResponse>(endpoint);
+      const response = await api.get<RequestsResponse>("/advances/my-requests", {
+        params
+      });
 
       // Transform the data to ensure compatibility
-      const requests = response.data.data.map((request) => ({
-        ...request,
-        id: request._id || request.id, // Ensure id field exists
+      const advances = response.data.data.advances.map((advance) => ({
+        ...advance,
+        id: advance._id,
       }));
 
-      return requests;
+      return {
+        advances,
+        pagination: response.data.data.pagination
+      };
     } catch (error) {
       console.error("Error fetching user requests:", error);
       throw error;
@@ -86,10 +142,10 @@ export const requestService = {
   // Get a specific request by ID
   async getRequestById(requestId: string): Promise<CashAdvanceRequest> {
     try {
-      const response = await api.get<RequestResponse>(`/requests/${requestId}`);
+      const response = await api.get<RequestResponse>(`/advances/my-requests/${requestId}`);
       return {
-        ...response.data.data,
-        id: response.data.data._id || response.data.data.id,
+        ...response.data.data.advance,
+        id: response.data.data.advance._id,
       };
     } catch (error) {
       console.error("Error fetching request:", error);
@@ -98,31 +154,13 @@ export const requestService = {
   },
 
   // Create a new cash advance request
-  async createRequest(
-    requestData: CreateRequestData
-  ): Promise<CashAdvanceRequest> {
+  async createRequest(requestData: CreateRequestData): Promise<CashAdvanceRequest> {
     try {
-      const formData = new FormData();
-      formData.append("purpose", requestData.purpose);
-      formData.append("description", requestData.description);
-      formData.append("amount", requestData.amount.toString());
-
-      // Append documents if any
-      if (requestData.documents) {
-        requestData.documents.forEach((file) => {
-          formData.append(`documents`, file);
-        });
-      }
-
-      const response = await api.post<RequestResponse>("/requests", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const response = await api.post<RequestResponse>("/advances", requestData);
 
       return {
-        ...response.data.data,
-        id: response.data.data._id || response.data.data.id,
+        ...response.data.data.advance,
+        id: response.data.data.advance._id,
       };
     } catch (error) {
       console.error("Error creating request:", error);
@@ -130,135 +168,20 @@ export const requestService = {
     }
   },
 
-  // Get advances that can be retired (disbursed but not yet retired)
-  async getAdvancesForRetirement(): Promise<AdvanceForRetirement[]> {
+  // Retire a cash advance
+  async retireAdvance(advanceId: string, retirementData: RetirementData): Promise<CashAdvanceRequest> {
     try {
-      const response = await api.get<{
-        success: boolean;
-        data: AdvanceForRetirement[];
-      }>("/requests/retirement/available");
-
-      // Transform data to ensure compatibility
-      const advances = response.data.data.map((advance) => ({
-        ...advance,
-        id: advance._id || advance.id,
-      }));
-
-      return advances;
-    } catch (error) {
-      console.error("Error fetching advances for retirement:", error);
-      throw error;
-    }
-  },
-
-  // Submit retirement documentation
-  async submitRetirement(retirementData: RetirementData): Promise<void> {
-    try {
-      const formData = new FormData();
-      formData.append("advanceId", retirementData.advanceId);
-      formData.append("retirementDate", retirementData.retirementDate);
-      formData.append("totalExpenses", retirementData.totalExpenses);
-      formData.append("description", retirementData.description);
-
-      // Append receipt files
-      retirementData.receipts.forEach((file) => {
-        formData.append("receipts", file);
-      });
-
-      await api.post("/requests/retirement", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-    } catch (error) {
-      console.error("Error submitting retirement:", error);
-      throw error;
-    }
-  },
-
-  // Update request status (for managers/admin)
-  async updateRequestStatus(
-    requestId: string,
-    status: "approved" | "rejected" | "disbursed",
-    comments?: string
-  ): Promise<CashAdvanceRequest> {
-    try {
-      const response = await api.patch<RequestResponse>(
-        `/requests/${requestId}/status`,
-        {
-          status,
-          comments,
-        }
+      const response = await api.put<RequestResponse>(
+        `/advances/${advanceId}/retire`,
+        retirementData
       );
 
       return {
-        ...response.data.data,
-        id: response.data.data._id || response.data.data.id,
+        ...response.data.data.advance,
+        id: response.data.data.advance._id,
       };
     } catch (error) {
-      console.error("Error updating request status:", error);
-      throw error;
-    }
-  },
-
-  // Get all requests for managers/admin
-  async getAllRequests(): Promise<CashAdvanceRequest[]> {
-    try {
-      const response = await api.get<RequestsResponse>("/requests");
-
-      const requests = response.data.data.map((request) => ({
-        ...request,
-        id: request._id || request.id,
-      }));
-
-      return requests;
-    } catch (error) {
-      console.error("Error fetching all requests:", error);
-      throw error;
-    }
-  },
-
-  // Get requests by status
-  async getRequestsByStatus(status: string): Promise<CashAdvanceRequest[]> {
-    try {
-      const response = await api.get<RequestsResponse>(
-        `/requests/status/${status}`
-      );
-
-      const requests = response.data.data.map((request) => ({
-        ...request,
-        id: request._id || request.id,
-      }));
-
-      return requests;
-    } catch (error) {
-      console.error("Error fetching requests by status:", error);
-      throw error;
-    }
-  },
-
-  // Delete a request (if allowed)
-  async deleteRequest(requestId: string): Promise<void> {
-    try {
-      await api.delete(`/requests/${requestId}`);
-    } catch (error) {
-      console.error("Error deleting request:", error);
-      throw error;
-    }
-  },
-
-  // Download request document
-  async downloadDocument(requestId: string, documentId: string): Promise<Blob> {
-    try {
-      const response = await api.get(
-        `/requests/${requestId}/documents/${documentId}`,
-        {
-          responseType: "blob",
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Error downloading document:", error);
+      console.error("Error retiring advance:", error);
       throw error;
     }
   },
@@ -269,16 +192,122 @@ export const requestService = {
     pending: number;
     approved: number;
     rejected: number;
-    disbursed: number;
     retired: number;
     totalAmount: number;
   }> {
     try {
-      const response = await api.get("/requests/stats");
-      return response.data.data;
+      const response = await api.get<StatsResponse>("/advances/staff/stats");
+      return response.data.data.stats;
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
       throw error;
     }
   },
+
+  // Get recent requests for dashboard
+  async getRecentRequests(): Promise<CashAdvanceRequest[]> {
+    try {
+      const response = await api.get<RecentRequestsResponse>("/advances/staff/recent");
+      
+      return response.data.data.advances.map(advance => ({
+        ...advance,
+        id: advance._id,
+      }));
+    } catch (error) {
+      console.error("Error fetching recent requests:", error);
+      throw error;
+    }
+  },
+
+  // Get pending requests for dashboard
+  async getPendingRequests(): Promise<CashAdvanceRequest[]> {
+    try {
+      const response = await api.get<RecentRequestsResponse>("/advances/staff/pending");
+      
+      return response.data.data.advances.map(advance => ({
+        ...advance,
+        id: advance._id,
+      }));
+    } catch (error) {
+      console.error("Error fetching pending requests:", error);
+      throw error;
+    }
+  },
+
+  // Get advances that are approved and can be retired
+  async getAdvancesForRetirement(): Promise<AdvanceForRetirement[]> {
+    try {
+      // We'll filter approved advances from the user's requests
+      const response = await api.get<RequestsResponse>("/advances/my-requests", {
+        params: { status: "approved" }
+      });
+
+      const advances = response.data.data.advances
+        .filter(advance => advance.status === "approved")
+        .map(advance => ({
+          _id: advance._id,
+          id: advance._id,
+          purpose: advance.purpose,
+          amount: advance.amount,
+          dateNeeded: advance.dateNeeded,
+          status: advance.status as "approved"
+        }));
+
+      return advances;
+    } catch (error) {
+      console.error("Error fetching advances for retirement:", error);
+      throw error;
+    }
+  },
+
+  // // The following methods are for admin/manager functionality
+  // // You can implement these later when you add those roles
+
+  // // Update request status (for managers/admin) - TO BE IMPLEMENTED
+  // async updateRequestStatus(
+  //   requestId: string,
+  //   status: "approved" | "rejected",
+  //   comments?: string
+  // ): Promise<CashAdvanceRequest> {
+  //   try {
+  //     // This will be implemented when you add admin endpoints
+  //     throw new Error("Not implemented yet");
+  //   } catch (error) {
+  //     console.error("Error updating request status:", error);
+  //     throw error;
+  //   }
+  // },
+
+  // // Get all requests for managers/admin - TO BE IMPLEMENTED
+  // async getAllRequests(): Promise<CashAdvanceRequest[]> {
+  //   try {
+  //     // This will be implemented when you add admin endpoints
+  //     throw new Error("Not implemented yet");
+  //   } catch (error) {
+  //     console.error("Error fetching all requests:", error);
+  //     throw error;
+  //   }
+  // },
+
+  // // Get requests by status - TO BE IMPLEMENTED
+  // async getRequestsByStatus(status: string): Promise<CashAdvanceRequest[]> {
+  //   try {
+  //     // This will be implemented when you add admin endpoints
+  //     throw new Error("Not implemented yet");
+  //   } catch (error) {
+  //     console.error("Error fetching requests by status:", error);
+  //     throw error;
+  //   }
+  // },
+
+  // // Delete a request - TO BE IMPLEMENTED
+  // async deleteRequest(requestId: string): Promise<void> {
+  //   try {
+  //     // This will be implemented when you add admin endpoints
+  //     throw new Error("Not implemented yet");
+  //   } catch (error) {
+  //     console.error("Error deleting request:", error);
+  //     throw error;
+  //   }
+  // }
 };
