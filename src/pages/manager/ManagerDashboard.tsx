@@ -90,7 +90,7 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Calculate statistics for the dashboard
+  // Calculate statistics for the manager dashboard
   const stats = {
     totalRequests: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
@@ -376,7 +376,7 @@ const ManagerDashboard = () => {
                     )}
                     <div className="mt-6">
                       <button
-                        onClick={() => navigate("/dashboard/team-requests")}
+                        onClick={() => navigate("/manager/dashboard/team-requests")}
                         className="w-full flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
                       >
                         View all team requests
@@ -397,7 +397,7 @@ const ManagerDashboard = () => {
                   <div className="px-4 py-5 sm:p-6">
                     <div className="space-y-4">
                       <button
-                        onClick={() => navigate("/dashboard/approvals")}
+                        onClick={() => navigate("/manager/dashboard/approvals")}
                         className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md text-left hover:bg-gray-50 cursor-pointer"
                       >
                         <div>
@@ -412,7 +412,7 @@ const ManagerDashboard = () => {
                       </button>
 
                       <button
-                        onClick={() => navigate("/dashboard/team")}
+                        onClick={() => navigate("/manager/dashboard/team")}
                         className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md text-left hover:bg-gray-50 cursor-pointer"
                       >
                         <div>
@@ -427,7 +427,7 @@ const ManagerDashboard = () => {
                       </button>
 
                       <button
-                        onClick={() => navigate("/dashboard/reports")}
+                        onClick={() => navigate("/manager/dashboard/reports")}
                         className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md text-left hover:bg-gray-50 cursor-pointer"
                       >
                         <div>
