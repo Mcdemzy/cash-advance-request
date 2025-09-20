@@ -91,7 +91,7 @@ const FinanceDashboard = () => {
     }
   };
 
-  // Calculate statistics for the dashboard
+  // Calculate statistics for the finance dashboard
   const stats = {
     totalRequests: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
@@ -378,7 +378,7 @@ const FinanceDashboard = () => {
                     )}
                     <div className="mt-6">
                       <button
-                        onClick={() => navigate("/dashboard/requests")}
+                        onClick={() => navigate("/finance/dashboard/requests")}
                         className="w-full flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
                       >
                         View all requests
@@ -399,7 +399,7 @@ const FinanceDashboard = () => {
                   <div className="px-4 py-5 sm:p-6">
                     <div className="space-y-4">
                       <button
-                        onClick={() => navigate("/dashboard/approvals")}
+                        onClick={() => navigate("/finance/dashboard/approvals")}
                         className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md text-left hover:bg-gray-50 cursor-pointer"
                       >
                         <div>
@@ -414,7 +414,7 @@ const FinanceDashboard = () => {
                       </button>
 
                       <button
-                        onClick={() => navigate("/dashboard/disbursements")}
+                        onClick={() => navigate("/finance/dashboard/disbursements")}
                         className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md text-left hover:bg-gray-50 cursor-pointer"
                       >
                         <div>
@@ -429,7 +429,7 @@ const FinanceDashboard = () => {
                       </button>
 
                       <button
-                        onClick={() => navigate("/dashboard/reports")}
+                        onClick={() => navigate("/finance/dashboard/reports")}
                         className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-md text-left hover:bg-gray-50 cursor-pointer"
                       >
                         <div>
