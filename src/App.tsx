@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import NewRequest from "./pages/dashboard/NewRequest";
 import AllRequests from "./pages/dashboard/AllRequests";
 import Retirement from "./pages/dashboard/Retirement";
+import ViewRequest from "./pages/dashboard/ViewRequest";
 
 const App = () => {
   return (
@@ -43,6 +44,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <AllRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/requests/:id"
+            element={
+              <ProtectedRoute>
+                <ViewRequest />
               </ProtectedRoute>
             }
           />
