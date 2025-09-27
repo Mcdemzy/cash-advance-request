@@ -1,3 +1,4 @@
+// Update your App.tsx to include the new manager routes
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import LandingPage from "./pages/landing/LandingPage";
@@ -7,6 +8,10 @@ import Dashboard from "./pages/dashboard/Dashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import FinanceDashboard from "./pages/finance/FinanceDashboard";
 import ManagerDashboard from "./pages/manager/ManagerDashboard";
+import ManagerApprovals from "./pages/manager/ManagerApprovals";
+import TeamManagement from "./pages/manager/TeamManagement";
+import TeamRequests from "./pages/manager/TeamRequests";
+import Reports from "./pages/manager/Reports";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NewRequest from "./pages/dashboard/NewRequest";
 import AllRequests from "./pages/dashboard/AllRequests";
@@ -63,22 +68,8 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/finance/dashboard"
-            element={
-              <ProtectedRoute requiredRole="finance">
-                <FinanceDashboard />
-              </ProtectedRoute>
-            }
-          />
+
+          {/* Manager Routes */}
           <Route
             path="/manager/dashboard"
             element={
@@ -87,8 +78,58 @@ const App = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/manager/dashboard/approvals"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <ManagerApprovals />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager/dashboard/team"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <TeamManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager/dashboard/team-requests"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <TeamRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager/dashboard/reports"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <Reports />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* Add other routes as needed */}
+          {/* Admin Routes */}
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Finance Routes */}
+          <Route
+            path="/finance/dashboard"
+            element={
+              <ProtectedRoute requiredRole="finance">
+                <FinanceDashboard />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </Router>
       <Toaster
