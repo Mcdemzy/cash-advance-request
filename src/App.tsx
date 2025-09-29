@@ -17,6 +17,8 @@ import NewRequest from "./pages/dashboard/NewRequest";
 import AllRequests from "./pages/dashboard/AllRequests";
 import Retirement from "./pages/dashboard/Retirement";
 import ViewRequest from "./pages/dashboard/ViewRequest";
+import TeamMemberRequests from "./pages/manager/TeamMemberRequests";
+import ManagerRequestDetail from "./pages/manager/ManagerRequestDetail";
 
 const App = () => {
   return (
@@ -107,6 +109,23 @@ const App = () => {
             element={
               <ProtectedRoute requiredRole="manager">
                 <Reports />
+              </ProtectedRoute>
+            }
+          />
+          {/* Add these two new routes */}
+          <Route
+            path="/manager/team/:id/requests"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <TeamMemberRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/manager/requests/:id"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <ManagerRequestDetail />
               </ProtectedRoute>
             }
           />
