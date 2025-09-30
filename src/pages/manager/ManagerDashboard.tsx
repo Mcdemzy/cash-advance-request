@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -17,43 +17,63 @@ import {
   Download,
 } from "lucide-react";
 import { authService } from "../../services/auth";
+import { managerService } from "../../services/manager";
+import type { TeamMember } from "../../services/manager";
+import type { CashAdvanceRequest } from "../../services/requests";
 
-interface CashAdvanceRequest {
-  id: string;
-  amount: number;
-  purpose: string;
-  status: "pending" | "approved" | "rejected" | "disbursed" | "retired";
-  submittedDate: string;
-  approvedDate?: string;
-  disbursedDate?: string;
-  retiredDate?: string;
-  approverComments?: string;
-  submittedBy: string;
-  department: string;
-  employeeId: string;
+interface DashboardData {
+  stats: {
+    pendingApprovals: number;
+    teamMembers: number;
+    totalTeamRequests: number;
+    approvedRequests: number;
+    pendingRequests: number;
+    totalAmount: number;
+  };
+  pendingApprovals: CashAdvanceRequest[];
+  teamMembers: TeamMember[];
+  recentTeamRequests: CashAdvanceRequest[];
 }
 
 const ManagerDashboard = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
-  const [requests] = useState<CashAdvanceRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await managerService.getDashboardStats();
+      setDashboardData(data);
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+      setError("Failed to load dashboard data");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // Correctly empty - no external dependencies
 
   useEffect(() => {
-    if (user?.role !== "manager") {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    if (user.role !== "manager") {
       navigate("/dashboard");
       return;
     }
 
-    // Simulate loading delay
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [user, navigate]);
+    fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role]); // Only depend on user.role, not the whole user object
 
   const handleLogout = () => {
     authService.logout();
@@ -66,8 +86,6 @@ const ManagerDashboard = () => {
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case "rejected":
         return <XCircle className="h-5 w-5 text-red-500" />;
-      case "disbursed":
-        return <CheckCircle className="h-5 w-5 text-blue-500" />;
       case "retired":
         return <CheckCircle className="h-5 w-5 text-purple-500" />;
       default:
@@ -81,8 +99,6 @@ const ManagerDashboard = () => {
         return "bg-green-100 text-green-800";
       case "rejected":
         return "bg-red-100 text-red-800";
-      case "disbursed":
-        return "bg-blue-100 text-blue-800";
       case "retired":
         return "bg-purple-100 text-purple-800";
       default:
@@ -90,22 +106,59 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Calculate statistics for the manager dashboard
-  const stats = {
-    totalRequests: requests.length,
-    pending: requests.filter((r) => r.status === "pending").length,
-    approved: requests.filter(
-      (r) => r.status === "approved" || r.status === "disbursed"
-    ).length,
-    retired: requests.filter((r) => r.status === "retired").length,
-    totalAmount: requests.reduce((sum, req) => sum + req.amount, 0),
-    pendingAmount: requests
-      .filter((r) => r.status === "pending")
-      .reduce((sum, req) => sum + req.amount, 0),
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
   };
 
-  const pendingRequests = requests.filter((req) => req.status === "pending");
-  const teamRequests = requests.slice(0, 5); // Show most recent 5 requests from team
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  // Use actual data from backend
+  const stats = dashboardData?.stats || {
+    pendingApprovals: 0,
+    teamMembers: 0,
+    totalTeamRequests: 0,
+    approvedRequests: 0,
+    pendingRequests: 0,
+    totalAmount: 0,
+  };
+
+  const pendingRequests = dashboardData?.pendingApprovals || [];
+  const teamRequests = dashboardData?.recentTeamRequests || [];
+  const teamMembers = dashboardData?.teamMembers || [];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading manager dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900">Error</h3>
+          <p className="mt-2 text-gray-600">{error}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -192,9 +245,7 @@ const ManagerDashboard = () => {
           <h1 className="text-2xl font-bold text-gray-900">
             Manager Dashboard
           </h1>
-          <p className="text-gray-600">
-            Welcome back, Manager {user?.firstName}!
-          </p>
+          <p className="text-gray-600">Welcome back, {user?.firstName}!</p>
         </div>
 
         {/* Tabs */}
@@ -218,7 +269,7 @@ const ManagerDashboard = () => {
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
-              Pending Approvals
+              Pending Approvals ({stats.pendingApprovals})
             </button>
             <button
               onClick={() => setActiveTab("team")}
@@ -228,7 +279,7 @@ const ManagerDashboard = () => {
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
-              Team Requests
+              Team Management
             </button>
           </nav>
         </div>
@@ -249,7 +300,7 @@ const ManagerDashboard = () => {
                         Team Requests
                       </p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {stats.totalRequests}
+                        {stats.totalTeamRequests}
                       </p>
                     </div>
                   </div>
@@ -267,7 +318,7 @@ const ManagerDashboard = () => {
                         Pending Approval
                       </p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {stats.pending}
+                        {stats.pendingApprovals}
                       </p>
                     </div>
                   </div>
@@ -285,7 +336,7 @@ const ManagerDashboard = () => {
                         Approved
                       </p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {stats.approved}
+                        {stats.approvedRequests}
                       </p>
                     </div>
                   </div>
@@ -302,7 +353,9 @@ const ManagerDashboard = () => {
                       <p className="text-sm font-medium text-gray-500">
                         Team Members
                       </p>
-                      <p className="text-2xl font-semibold text-gray-900">8</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {stats.teamMembers}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -319,11 +372,7 @@ const ManagerDashboard = () => {
                     </h3>
                   </div>
                   <div className="px-4 py-5 sm:p-6">
-                    {isLoading ? (
-                      <div className="text-center py-4">
-                        <p>Loading requests...</p>
-                      </div>
-                    ) : teamRequests.length === 0 ? (
+                    {teamRequests.length === 0 ? (
                       <div className="text-center py-8">
                         <FileText className="mx-auto h-12 w-12 text-gray-400" />
                         <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -338,23 +387,23 @@ const ManagerDashboard = () => {
                       <div className="overflow-hidden">
                         <ul className="divide-y divide-gray-200">
                           {teamRequests.map((request) => (
-                            <li key={request.id} className="py-4">
+                            <li key={request._id} className="py-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center">
                                   {getStatusIcon(request.status)}
                                   <div className="ml-4">
                                     <p className="text-sm font-medium text-gray-900">
-                                      ${request.amount} - {request.purpose}
+                                      {formatCurrency(request.amount)} -{" "}
+                                      {request.purpose}
                                     </p>
                                     <p className="text-sm text-gray-500">
-                                      {request.submittedBy} •{" "}
-                                      {request.department}
+                                      {request.user.firstName}{" "}
+                                      {request.user.lastName} •{" "}
+                                      {request.user.department}
                                     </p>
                                     <p className="text-sm text-gray-500">
                                       Submitted on{" "}
-                                      {new Date(
-                                        request.submittedDate
-                                      ).toLocaleDateString()}
+                                      {formatDate(request.createdAt)}
                                     </p>
                                   </div>
                                 </div>
@@ -376,7 +425,9 @@ const ManagerDashboard = () => {
                     )}
                     <div className="mt-6">
                       <button
-                        onClick={() => navigate("/manager/dashboard/team-requests")}
+                        onClick={() =>
+                          navigate("/manager/dashboard/team-requests")
+                        }
                         className="w-full flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 cursor-pointer"
                       >
                         View all team requests
@@ -405,7 +456,7 @@ const ManagerDashboard = () => {
                             Review Requests
                           </p>
                           <p className="text-sm text-gray-500">
-                            {stats.pending} requests pending approval
+                            {stats.pendingApprovals} requests pending approval
                           </p>
                         </div>
                         <FileText className="h-5 w-5 text-gray-400" />
@@ -458,7 +509,7 @@ const ManagerDashboard = () => {
                           Team Members
                         </span>
                         <span className="text-sm font-medium text-blue-600">
-                          8
+                          {stats.teamMembers}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -466,23 +517,23 @@ const ManagerDashboard = () => {
                           Pending Approvals
                         </span>
                         <span className="text-sm font-medium text-yellow-600">
-                          {stats.pending}
+                          {stats.pendingApprovals}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">
-                          Monthly Budget
+                          Total Requests
                         </span>
                         <span className="text-sm font-medium text-green-600">
-                          $5,000
+                          {stats.totalTeamRequests}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">
-                          Budget Used
+                          Total Amount
                         </span>
-                        <span className="text-sm font-medium text-red-600">
-                          $3,200
+                        <span className="text-sm font-medium text-purple-600">
+                          {formatCurrency(stats.totalAmount)}
                         </span>
                       </div>
                     </div>
@@ -514,11 +565,7 @@ const ManagerDashboard = () => {
               </div>
             </div>
             <div className="px-4 py-5 sm:p-6">
-              {isLoading ? (
-                <div className="text-center py-4">
-                  <p>Loading approvals...</p>
-                </div>
-              ) : pendingRequests.length === 0 ? (
+              {pendingRequests.length === 0 ? (
                 <div className="text-center py-8">
                   <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
                   <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -543,7 +590,7 @@ const ManagerDashboard = () => {
                           Department
                         </th>
                         <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
+                          Date Needed
                         </th>
                         <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
@@ -552,12 +599,12 @@ const ManagerDashboard = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {pendingRequests.map((request) => (
-                        <tr key={request.id}>
+                        <tr key={request._id}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="ml-4">
                                 <div className="text-sm font-medium text-gray-900">
-                                  ${request.amount}
+                                  {formatCurrency(request.amount)}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   {request.purpose}
@@ -567,20 +614,29 @@ const ManagerDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
-                              {request.submittedBy}
+                              {request.user.firstName} {request.user.lastName}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {request.user.employeeId}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                              {request.department}
+                              {request.user.department}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(
-                              request.submittedDate
-                            ).toLocaleDateString()}
+                            {formatDate(request.dateNeeded)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() =>
+                                navigate(`/manager/requests/${request._id}`)
+                              }
+                              className="text-blue-600 hover:text-blue-900 mr-3"
+                            >
+                              View
+                            </button>
                             <button className="text-green-600 hover:text-green-900 mr-3">
                               Approve
                             </button>
@@ -612,108 +668,53 @@ const ManagerDashboard = () => {
                   Your Team Members
                 </h4>
                 <p className="text-sm text-gray-500">
-                  8 team members in your department
+                  {teamMembers.length} team members in your department
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Team member cards */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <div className="bg-blue-100 rounded-full p-3">
-                      <User className="h-6 w-6 text-blue-600" />
+                {teamMembers.map((member) => (
+                  <div
+                    key={member._id}
+                    className="border border-gray-200 rounded-lg p-4"
+                  >
+                    <div className="flex items-center">
+                      <div className="bg-blue-100 rounded-full p-3">
+                        <User className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div className="ml-4">
+                        <h3 className="text-lg font-medium text-gray-900">
+                          {member.firstName} {member.lastName}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {member.position}
+                        </p>
+                      </div>
                     </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        John Smith
-                      </h3>
-                      <p className="text-sm text-gray-500">Senior Developer</p>
+                    <div className="mt-4 flex justify-between text-sm text-gray-500">
+                      <span>Requests: {member.stats?.total || 0}</span>{" "}
+                      {/* ✅ FIXED */}
+                      <span>Pending: {member.stats?.pending || 0}</span>{" "}
+                      {/* ✅ FIXED */}
+                    </div>
+                    <div className="mt-2">
+                      <button
+                        onClick={() =>
+                          navigate(`/manager/team/${member._id}/requests`)
+                        }
+                        className="w-full mt-2 px-3 py-1 text-xs border border-gray-300 rounded text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        View Requests
+                      </button>
                     </div>
                   </div>
-                  <div className="mt-4 flex justify-between text-sm text-gray-500">
-                    <span>Requests: 3</span>
-                    <span>Pending: 1</span>
-                  </div>
-                </div>
+                ))}
 
+                {/* View All Card */}
                 <div className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center">
                     <div className="bg-blue-100 rounded-full p-3">
-                      <User className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Sarah Johnson
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        Marketing Specialist
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-between text-sm text-gray-500">
-                    <span>Requests: 5</span>
-                    <span>Pending: 2</span>
-                  </div>
-                </div>
-
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <div className="bg-blue-100 rounded-full p-3">
-                      <User className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Michael Brown
-                      </h3>
-                      <p className="text-sm text-gray-500">Sales Executive</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-between text-sm text-gray-500">
-                    <span>Requests: 2</span>
-                    <span>Pending: 0</span>
-                  </div>
-                </div>
-
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <div className="bg-blue-100 rounded-full p-3">
-                      <User className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Emily Davis
-                      </h3>
-                      <p className="text-sm text-gray-500">Project Manager</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-between text-sm text-gray-500">
-                    <span>Requests: 4</span>
-                    <span>Pending: 1</span>
-                  </div>
-                </div>
-
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <div className="bg-blue-100 rounded-full p-3">
-                      <User className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        David Wilson
-                      </h3>
-                      <p className="text-sm text-gray-500">QA Engineer</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-between text-sm text-gray-500">
-                    <span>Requests: 1</span>
-                    <span>Pending: 0</span>
-                  </div>
-                </div>
-
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <div className="bg-blue-100 rounded-full p-3">
-                      <User className="h-6 w-6 text-blue-600" />
+                      <Users className="h-6 w-6 text-blue-600" />
                     </div>
                     <div className="ml-4">
                       <h3 className="text-lg font-medium text-gray-900">
@@ -725,7 +726,10 @@ const ManagerDashboard = () => {
                     </div>
                   </div>
                   <div className="mt-4">
-                    <button className="w-full px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    <button
+                      onClick={() => navigate("/manager/dashboard/team")}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                    >
                       View All Members
                     </button>
                   </div>
