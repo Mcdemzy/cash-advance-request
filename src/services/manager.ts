@@ -130,6 +130,15 @@ export interface ReportsResponse {
   };
 }
 
+// Specific interface for approve/reject responses
+export interface ProcessRequestResponse {
+  success: boolean;
+  message: string;
+  data: {
+    advance: CashAdvanceRequest;
+  };
+}
+
 export const managerService = {
   // Get manager dashboard overview
   async getDashboardStats(): Promise<ManagerDashboardResponse["data"]> {
@@ -153,7 +162,13 @@ export const managerService = {
     try {
       const response = await api.get<PendingApprovalsResponse>(
         "/manager/pending-approvals",
-        { params }
+        {
+          params: {
+            page: params?.page || 1,
+            limit: params?.limit || 10,
+            search: params?.search || "",
+          },
+        }
       );
       return response.data.data;
     } catch (error) {
@@ -163,15 +178,11 @@ export const managerService = {
   },
 
   // Approve a request
-  async approveRequest(
-    requestId: string
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data: { advance: CashAdvanceRequest };
-  }> {
+  async approveRequest(requestId: string): Promise<ProcessRequestResponse> {
     try {
-      const response = await api.put(`/manager/requests/${requestId}/approve`);
+      const response = await api.put<ProcessRequestResponse>(
+        `/manager/requests/${requestId}/approve`
+      );
       return response.data;
     } catch (error) {
       console.error("Error approving request:", error);
@@ -183,15 +194,14 @@ export const managerService = {
   async rejectRequest(
     requestId: string,
     reason: string
-  ): Promise<{
-    success: boolean;
-    message: string;
-    data: { advance: CashAdvanceRequest };
-  }> {
+  ): Promise<ProcessRequestResponse> {
     try {
-      const response = await api.put(`/manager/requests/${requestId}/reject`, {
-        reason,
-      });
+      const response = await api.put<ProcessRequestResponse>(
+        `/manager/requests/${requestId}/reject`,
+        {
+          reason,
+        }
+      );
       return response.data;
     } catch (error) {
       console.error("Error rejecting request:", error);
@@ -210,7 +220,15 @@ export const managerService = {
     try {
       const response = await api.get<TeamRequestsResponse>(
         "/manager/team-requests",
-        { params }
+        {
+          params: {
+            status: params?.status || "all",
+            page: params?.page || 1,
+            limit: params?.limit || 10,
+            sort: params?.sort || "-createdAt",
+            search: params?.search || "",
+          },
+        }
       );
       return response.data.data;
     } catch (error) {
@@ -226,7 +244,11 @@ export const managerService = {
     try {
       const response = await api.get<TeamMembersResponse>(
         "/manager/team-members",
-        { params }
+        {
+          params: {
+            search: params?.search || "",
+          },
+        }
       );
       return response.data.data;
     } catch (error) {
@@ -247,7 +269,13 @@ export const managerService = {
     try {
       const response = await api.get<TeamMemberRequestsResponse>(
         `/manager/team-members/${memberId}/requests`,
-        { params }
+        {
+          params: {
+            status: params?.status || "all",
+            page: params?.page || 1,
+            limit: params?.limit || 10,
+          },
+        }
       );
       return response.data.data;
     } catch (error) {
@@ -279,7 +307,12 @@ export const managerService = {
     try {
       const response = await api.get<ReportsResponse>(
         "/manager/reports/summary",
-        { params }
+        {
+          params: {
+            startDate: params?.startDate,
+            endDate: params?.endDate,
+          },
+        }
       );
       return response.data.data;
     } catch (error) {
