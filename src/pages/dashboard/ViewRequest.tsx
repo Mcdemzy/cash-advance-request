@@ -555,7 +555,7 @@ const ViewRequest = () => {
                   <label className="text-sm font-medium text-gray-500">
                     Email
                   </label>
-                  <p className="text-gray-900">{request.user.email}</p>
+                  <p className="text-gray-900 truncate">{request.user.email}</p>
                 </div>
                 {request.user.position && (
                   <div>

@@ -1,5 +1,4 @@
-// pages/manager/ManagerRequestDetail.tsx
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -15,43 +14,36 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
-// import { authService } from "../../services/auth";
+import { managerService } from "../../services/manager";
+import type { CashAdvanceRequest } from "../../services/requests";
 
 const ManagerRequestDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-//   const user = authService.getCurrentUser();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [request, setRequest] = useState<CashAdvanceRequest | null>(null);
+  const [processing, setProcessing] = useState(false);
 
-  // Dummy data for request details
-  const [request] = useState({
-    id: id || "CA-2024-001",
-    amount: 1200,
-    purpose: "Conference Travel",
-    description:
-      "Travel expenses for the Annual Tech Conference 2024 in San Francisco. This includes round-trip flight tickets, 3-night hotel accommodation, conference registration fee, and local transportation.",
-    detailedBreakdown: `• Flight: $600 (round-trip)
-• Hotel: $400 (3 nights)
-• Conference Ticket: $150
-• Transportation: $50
-• Total: $1200`,
-    status: "pending" as "pending" | "approved" | "rejected" | "retired",
-    submittedDate: "2024-01-15T10:30:00Z",
-    dateNeeded: "2024-02-01",
-    priority: "high" as "low" | "medium" | "high" | "urgent",
-    submittedBy: {
-      id: "1",
-      firstName: "John",
-      lastName: "Smith",
-      email: "john.smith@company.com",
-      employeeId: "EMP-001",
-      department: "Engineering",
-      position: "Senior Developer",
-      phone: "+1 (555) 123-4567",
-    },
-    projectCode: "PROJ-2024-CONF",
-    additionalNotes:
-      "This conference is crucial for staying updated with the latest React and TypeScript developments. The knowledge gained will directly benefit our current projects.",
-  });
+  const fetchRequestDetail = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await managerService.getRequestDetail(id);
+      setRequest(data.request);
+    } catch (err) {
+      console.error("Error fetching request details:", err);
+      setError("Failed to load request details");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchRequestDetail();
+  }, [fetchRequestDetail]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -94,20 +86,71 @@ const ManagerRequestDetail = () => {
     }
   };
 
-  const handleApprove = () => {
-    if (confirm(`Are you sure you want to approve request ${request.id}?`)) {
-      alert(`Request ${request.id} approved successfully!`);
+  const handleApprove = async () => {
+    if (!request || !confirm(`Are you sure you want to approve this request?`))
+      return;
+
+    try {
+      setProcessing(true);
+      await managerService.approveRequest(request._id);
+      alert("Request approved successfully!");
       navigate("/manager/dashboard/approvals");
+    } catch (err) {
+      console.error("Error approving request:", err);
+      alert("Failed to approve request. Please try again.");
+      setProcessing(false);
     }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
+    if (!request) return;
+
     const reason = prompt("Please provide a reason for rejection:");
-    if (reason) {
-      alert(`Request ${request.id} rejected. Reason: ${reason}`);
+    if (!reason || reason.trim().length === 0) {
+      alert("Rejection reason is required");
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      await managerService.rejectRequest(request._id, reason.trim());
+      alert("Request rejected successfully!");
       navigate("/manager/dashboard/approvals");
+    } catch (err) {
+      console.error("Error rejecting request:", err);
+      alert("Failed to reject request. Please try again.");
+      setProcessing(false);
     }
   };
+
+  if (error && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900">Error</h3>
+          <p className="mt-2 text-gray-600">{error}</p>
+          <button
+            onClick={fetchRequestDetail}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !request) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading request details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -124,7 +167,7 @@ const ManagerRequestDetail = () => {
 
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
             <div className="flex-1">
-              <div className="flex items-center gap-4 mb-2">
+              <div className="flex items-center gap-4 mb-2 flex-wrap">
                 <h1 className="text-2xl font-bold text-gray-900">
                   Request Details
                 </h1>
@@ -146,21 +189,22 @@ const ManagerRequestDetail = () => {
                   Priority
                 </span>
               </div>
-              <p className="text-gray-600">Request ID: {request.id}</p>
             </div>
 
             {request.status === "pending" && (
               <div className="flex items-center gap-2 mt-4 lg:mt-0">
                 <button
                   onClick={handleApprove}
-                  className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                  disabled={processing}
+                  className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Approve
                 </button>
                 <button
                   onClick={handleReject}
-                  className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  disabled={processing}
+                  className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
                   <XCircle className="h-4 w-4 mr-2" />
                   Reject
@@ -222,36 +266,40 @@ const ManagerRequestDetail = () => {
                   </p>
                 </div>
 
-                {request.detailedBreakdown && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Expense Breakdown
+                {request.rejectedReason && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <label className="text-sm font-medium text-red-800">
+                      Rejection Reason
                     </label>
-                    <pre className="mt-1 text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded-md text-sm">
-                      {request.detailedBreakdown}
-                    </pre>
-                  </div>
-                )}
-
-                {request.additionalNotes && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Additional Notes
-                    </label>
-                    <p className="mt-1 text-gray-900 whitespace-pre-wrap">
-                      {request.additionalNotes}
+                    <p className="mt-1 text-red-900">
+                      {request.rejectedReason}
                     </p>
                   </div>
                 )}
 
-                {request.projectCode && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">
-                      Project Code
+                {request.retirement && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <label className="text-sm font-medium text-purple-800 mb-2 block">
+                      Retirement Information
                     </label>
-                    <p className="mt-1 text-gray-900 font-mono">
-                      {request.projectCode}
-                    </p>
+                    <div className="space-y-2 text-sm">
+                      <p>
+                        <span className="font-medium">Date:</span>{" "}
+                        {new Date(
+                          request.retirement.retirementDate
+                        ).toLocaleDateString()}
+                      </p>
+                      <p>
+                        <span className="font-medium">Total Expenses:</span> $
+                        {request.retirement.totalExpenses.toLocaleString()}
+                      </p>
+                      <p>
+                        <span className="font-medium">Breakdown:</span>
+                      </p>
+                      <pre className="whitespace-pre-wrap bg-white p-2 rounded">
+                        {request.retirement.expenseBreakdown}
+                      </pre>
+                    </div>
                   </div>
                 )}
               </div>
@@ -277,11 +325,10 @@ const ManagerRequestDetail = () => {
                         Request Submitted
                       </p>
                       <p className="text-sm text-gray-500">
-                        {new Date(request.submittedDate).toLocaleString()}
+                        {new Date(request.createdAt).toLocaleString()}
                       </p>
                       <p className="text-sm text-gray-600">
-                        By: {request.submittedBy.firstName}{" "}
-                        {request.submittedBy.lastName}
+                        By: {request.user.firstName} {request.user.lastName}
                       </p>
                     </div>
                   </div>
@@ -299,6 +346,48 @@ const ManagerRequestDetail = () => {
                         </p>
                         <p className="text-sm text-gray-500">
                           Pending manager review
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {request.status === "approved" && request.approvedAt && (
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-900">
+                          Approved
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(request.approvedAt).toLocaleString()}
+                        </p>
+                        {request.approvedBy && (
+                          <p className="text-sm text-gray-600">
+                            By: {request.approvedBy.firstName}{" "}
+                            {request.approvedBy.lastName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {request.status === "rejected" && request.rejectedAt && (
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                          <XCircle className="h-4 w-4 text-red-600" />
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-900">
+                          Rejected
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(request.rejectedAt).toLocaleString()}
                         </p>
                       </div>
                     </div>
@@ -324,31 +413,32 @@ const ManagerRequestDetail = () => {
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">
-                      {request.submittedBy.firstName}{" "}
-                      {request.submittedBy.lastName}
+                      {request.user.firstName} {request.user.lastName}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      {request.submittedBy.position}
+                      {request.user.position}
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center text-gray-600">
-                    <Mail className="h-4 w-4 mr-2" />
-                    {request.submittedBy.email}
+                    <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <span className="truncate">{request.user.email}</span>
                   </div>
                   <div className="flex items-center text-gray-600">
-                    <Building className="h-4 w-4 mr-2" />
-                    {request.submittedBy.department}
+                    <Building className="h-4 w-4 mr-2 flex-shrink-0" />
+                    {request.user.department}
                   </div>
+                  {request.user.phone && (
+                    <div className="flex items-center text-gray-600">
+                      <Phone className="h-4 w-4 mr-2 flex-shrink-0" />
+                      {request.user.phone}
+                    </div>
+                  )}
                   <div className="flex items-center text-gray-600">
-                    <Phone className="h-4 w-4 mr-2" />
-                    {request.submittedBy.phone}
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <User className="h-4 w-4 mr-2" />
-                    {request.submittedBy.employeeId}
+                    <User className="h-4 w-4 mr-2 flex-shrink-0" />
+                    {request.user.employeeId}
                   </div>
                 </div>
               </div>
@@ -362,14 +452,13 @@ const ManagerRequestDetail = () => {
                 </h2>
               </div>
               <div className="p-6 space-y-3">
-                <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <a
+                  href={`mailto:${request.user.email}`}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
                   <Mail className="h-4 w-4 mr-2" />
                   Contact Requester
-                </button>
-                <button className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Request More Info
-                </button>
+                </a>
               </div>
             </div>
 

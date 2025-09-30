@@ -1,102 +1,65 @@
-// pages/manager/ManagerApprovals.tsx
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Search,
-//   Filter,
   Download,
   Eye,
   CheckCircle,
   XCircle,
   Clock,
+  AlertCircle,
 } from "lucide-react";
-// import { authService } from "../../services/auth";
-
-interface ApprovalRequest {
-  id: string;
-  amount: number;
-  purpose: string;
-  description: string;
-  status: "pending" | "approved" | "rejected";
-  submittedDate: string;
-  dateNeeded: string;
-  submittedBy: string;
-  department: string;
-  employeeId: string;
-  priority: "low" | "medium" | "high" | "urgent";
-}
+import { managerService } from "../../services/manager";
+import type { CashAdvanceRequest } from "../../services/requests";
 
 const ManagerApprovals = () => {
   const navigate = useNavigate();
-//   const user = authService.getCurrentUser();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [approvalRequests, setApprovalRequests] = useState<
+    CashAdvanceRequest[]
+  >([]);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalRequests: 0,
+  });
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Dummy data for approvals
-  const [approvalRequests] = useState<ApprovalRequest[]>([
-    {
-      id: "CA-2024-001",
-      amount: 1200,
-      purpose: "Conference Travel",
-      description:
-        "Travel expenses for annual tech conference in San Francisco",
-      status: "pending",
-      submittedDate: "2024-01-15",
-      dateNeeded: "2024-02-01",
-      submittedBy: "John Smith",
-      department: "Engineering",
-      employeeId: "EMP-001",
-      priority: "high",
-    },
-    {
-      id: "CA-2024-002",
-      amount: 350,
-      purpose: "Office Supplies",
-      description: "Purchase of stationery and office supplies for Q1",
-      status: "pending",
-      submittedDate: "2024-01-14",
-      dateNeeded: "2024-01-20",
-      submittedBy: "Sarah Johnson",
-      department: "Marketing",
-      employeeId: "EMP-002",
-      priority: "medium",
-    },
-    {
-      id: "CA-2024-003",
-      amount: 500,
-      purpose: "Client Meeting",
-      description: "Expenses for client dinner and meeting",
-      status: "approved",
-      submittedDate: "2024-01-10",
-      dateNeeded: "2024-01-18",
-      submittedBy: "Michael Brown",
-      department: "Sales",
-      employeeId: "EMP-003",
-      priority: "urgent",
-    },
-    {
-      id: "CA-2024-004",
-      amount: 200,
-      purpose: "Team Lunch",
-      description: "Quarterly team building lunch",
-      status: "rejected",
-      submittedDate: "2024-01-08",
-      dateNeeded: "2024-01-15",
-      submittedBy: "Emily Davis",
-      department: "Engineering",
-      employeeId: "EMP-004",
-      priority: "low",
-    },
-  ]);
+  const fetchApprovals = useCallback(async (page = 1, search = "") => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await managerService.getPendingApprovals({
+        page,
+        limit: 10,
+        search,
+      });
+      setApprovalRequests(data.pendingApprovals);
+      setPagination({
+        currentPage: data.pagination.currentPage,
+        totalPages: data.pagination.totalPages,
+        totalRequests: data.pagination.totalRequests,
+      });
+    } catch (err) {
+      console.error("Error fetching approvals:", err);
+      setError("Failed to load approval requests");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchApprovals(1, searchTerm);
+  }, [fetchApprovals, searchTerm]);
 
   const filteredRequests = approvalRequests.filter((request) => {
-    const matchesSearch =
-      request.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.submittedBy.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       statusFilter === "all" || request.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesStatus;
   });
 
   const getStatusIcon = (status: string) => {
@@ -136,18 +99,69 @@ const ManagerApprovals = () => {
     }
   };
 
-  const handleApprove = (requestId: string) => {
-    alert(`Approved request ${requestId}`);
-    // In real app, this would call an API
-  };
+  const handleApprove = async (requestId: string) => {
+    if (!confirm("Are you sure you want to approve this request?")) return;
 
-  const handleReject = (requestId: string) => {
-    const reason = prompt("Please provide a reason for rejection:");
-    if (reason) {
-      alert(`Rejected request ${requestId}. Reason: ${reason}`);
-      // In real app, this would call an API
+    try {
+      setProcessingId(requestId);
+      await managerService.approveRequest(requestId);
+
+      // Refresh the list
+      await fetchApprovals(pagination.currentPage, searchTerm);
+
+      alert("Request approved successfully!");
+    } catch (err) {
+      console.error("Error approving request:", err);
+      alert("Failed to approve request. Please try again.");
+    } finally {
+      setProcessingId(null);
     }
   };
+
+  const handleReject = async (requestId: string) => {
+    const reason = prompt("Please provide a reason for rejection:");
+    if (!reason || reason.trim().length === 0) {
+      alert("Rejection reason is required");
+      return;
+    }
+
+    try {
+      setProcessingId(requestId);
+      await managerService.rejectRequest(requestId, reason.trim());
+
+      // Refresh the list
+      await fetchApprovals(pagination.currentPage, searchTerm);
+
+      alert("Request rejected successfully!");
+    } catch (err) {
+      console.error("Error rejecting request:", err);
+      alert("Failed to reject request. Please try again.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    fetchApprovals(newPage, searchTerm);
+  };
+
+  if (error && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900">Error</h3>
+          <p className="mt-2 text-gray-600">{error}</p>
+          <button
+            onClick={() => fetchApprovals(1, searchTerm)}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -211,125 +225,170 @@ const ManagerApprovals = () => {
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">
-              Approval Requests ({filteredRequests.length})
+              Approval Requests ({pagination.totalRequests})
             </h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Request Details
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Submitted By
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Priority
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date Needed
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredRequests.map((request) => (
-                  <tr key={request.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          ${request.amount.toLocaleString()} - {request.purpose}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate max-w-xs">
-                          {request.description}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          ID: {request.id}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {request.submittedBy}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {request.department}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(
-                          request.priority
-                        )}`}
-                      >
-                        {request.priority.charAt(0).toUpperCase() +
-                          request.priority.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(request.dateNeeded).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                          request.status
-                        )}`}
-                      >
-                        {getStatusIcon(request.status)}
-                        <span className="ml-1 capitalize">
-                          {request.status}
-                        </span>
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          onClick={() =>
-                            navigate(`/manager/requests/${request.id}`)
-                          }
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        {request.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => handleApprove(request.id)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleReject(request.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {filteredRequests.length === 0 && (
+
+          {isLoading ? (
             <div className="text-center py-12">
-              <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
-                No requests found
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                No approval requests match your current filters.
-              </p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading approvals...</p>
             </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Request Details
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Submitted By
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Priority
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date Needed
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredRequests.map((request) => (
+                      <tr key={request._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              ${request.amount.toLocaleString()} -{" "}
+                              {request.purpose}
+                            </div>
+                            <div className="text-sm text-gray-500 truncate max-w-xs">
+                              {request.description}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {request.user.firstName} {request.user.lastName}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {request.user.department}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(
+                              request.priority
+                            )}`}
+                          >
+                            {request.priority.charAt(0).toUpperCase() +
+                              request.priority.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(request.dateNeeded).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                              request.status
+                            )}`}
+                          >
+                            {getStatusIcon(request.status)}
+                            <span className="ml-1 capitalize">
+                              {request.status}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() =>
+                                navigate(`/manager/requests/${request._id}`)
+                              }
+                              className="text-blue-600 hover:text-blue-900"
+                              title="View Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            {request.status === "pending" && (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(request._id)}
+                                  disabled={processingId === request._id}
+                                  className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                                  title="Approve"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleReject(request._id)}
+                                  disabled={processingId === request._id}
+                                  className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                  title="Reject"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredRequests.length === 0 && (
+                <div className="text-center py-12">
+                  <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">
+                    No requests found
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    No approval requests match your current filters.
+                  </p>
+                </div>
+              )}
+
+              {/* Pagination */}
+              {pagination.totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Page {pagination.currentPage} of {pagination.totalPages}
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() =>
+                        handlePageChange(pagination.currentPage - 1)
+                      }
+                      disabled={pagination.currentPage === 1}
+                      className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() =>
+                        handlePageChange(pagination.currentPage + 1)
+                      }
+                      disabled={
+                        pagination.currentPage === pagination.totalPages
+                      }
+                      className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

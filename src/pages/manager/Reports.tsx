@@ -1,5 +1,4 @@
-// pages/manager/Reports.tsx
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -9,43 +8,130 @@ import {
   Users,
   DollarSign,
   Calendar,
+  AlertCircle,
 } from "lucide-react";
-// import { authService } from "../../services/auth";
+import { managerService } from "../../services/manager";
 
 const Reports = () => {
   const navigate = useNavigate();
-//   const user = authService.getCurrentUser();
-  const [dateRange, setDateRange] = useState("30days");
+  const [dateRange, setDateRange] = useState("year");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reportData, setReportData] = useState<any>(null);
 
-  // Dummy data for reports
-  const reportData = {
-    summary: {
-      totalRequests: 45,
-      approved: 32,
-      pending: 8,
-      rejected: 5,
-      totalAmount: 28500,
-      averageAmount: 633,
-      approvalRate: 71,
-    },
-    departmentBreakdown: [
-      {
-        department: "Engineering",
-        requests: 18,
-        amount: 12500,
-        approvalRate: 78,
-      },
-      { department: "Marketing", requests: 12, amount: 8500, approvalRate: 67 },
-      { department: "Sales", requests: 8, amount: 4500, approvalRate: 75 },
-      { department: "Design", requests: 7, amount: 3000, approvalRate: 86 },
-    ],
-    monthlyTrends: [
-      { month: "Jan", requests: 8, amount: 5200 },
-      { month: "Feb", requests: 12, amount: 7800 },
-      { month: "Mar", requests: 10, amount: 6500 },
-      { month: "Apr", requests: 15, amount: 9000 },
-    ],
+  const getDateRange = (range: string) => {
+    const endDate = new Date();
+    const startDate = new Date();
+
+    switch (range) {
+      case "7days":
+        startDate.setDate(endDate.getDate() - 7);
+        break;
+      case "30days":
+        startDate.setDate(endDate.getDate() - 30);
+        break;
+      case "90days":
+        startDate.setDate(endDate.getDate() - 90);
+        break;
+      case "year":
+        startDate.setMonth(0, 1); // January 1st of current year
+        break;
+    }
+
+    return {
+      startDate: startDate.toISOString().split("T")[0],
+      endDate: endDate.toISOString().split("T")[0],
+    };
   };
+
+  const fetchReports = useCallback(async (range: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const dates = getDateRange(range);
+      const data = await managerService.getReports(dates);
+      setReportData(data);
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setError("Failed to load reports");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReports(dateRange);
+  }, [fetchReports, dateRange]);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
+  };
+
+  const getMonthName = (monthNumber: number) => {
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    return months[monthNumber - 1] || "N/A";
+  };
+
+  if (error && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900">Error</h3>
+          <p className="mt-2 text-gray-600">{error}</p>
+          <button
+            onClick={() => fetchReports(dateRange)}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !reportData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading reports...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const approvalRate =
+    reportData.summary.totalRequests > 0
+      ? Math.round(
+          (reportData.summary.approvedRequests /
+            reportData.summary.totalRequests) *
+            100
+        )
+      : 0;
+
+  const averageAmount =
+    reportData.summary.totalRequests > 0
+      ? Math.round(
+          reportData.summary.totalAmount / reportData.summary.totalRequests
+        )
+      : 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -111,10 +197,10 @@ const Reports = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Approved</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {reportData.summary.approved}
+                  {reportData.summary.approvedRequests}
                 </p>
                 <p className="text-sm text-green-600">
-                  {reportData.summary.approvalRate}% approval rate
+                  {approvalRate}% approval rate
                 </p>
               </div>
             </div>
@@ -130,10 +216,10 @@ const Reports = () => {
                   Total Amount
                 </p>
                 <p className="text-2xl font-bold text-gray-900">
-                  ${reportData.summary.totalAmount.toLocaleString()}
+                  {formatCurrency(reportData.summary.totalAmount)}
                 </p>
                 <p className="text-sm text-gray-500">
-                  Avg: ${reportData.summary.averageAmount}
+                  Avg: {formatCurrency(averageAmount)}
                 </p>
               </div>
             </div>
@@ -147,7 +233,7 @@ const Reports = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Pending</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {reportData.summary.pending}
+                  {reportData.summary.pendingRequests}
                 </p>
                 <p className="text-sm text-yellow-600">Awaiting approval</p>
               </div>
@@ -156,31 +242,49 @@ const Reports = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Department Breakdown */}
+          {/* Status Breakdown */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Department Breakdown
+              Status Breakdown
             </h2>
             <div className="space-y-4">
-              {reportData.departmentBreakdown.map((dept, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {dept.department}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-900">
-                      {dept.requests} requests
+              {reportData.statusBreakdown.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No data available for this period
+                </p>
+              ) : (
+                reportData.statusBreakdown.map((status: any, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <div
+                        className={`w-3 h-3 rounded-full mr-3 ${
+                          status._id === "approved"
+                            ? "bg-green-500"
+                            : status._id === "pending"
+                            ? "bg-yellow-500"
+                            : status._id === "rejected"
+                            ? "bg-red-500"
+                            : "bg-purple-500"
+                        }`}
+                      ></div>
+                      <span className="text-sm font-medium text-gray-900 capitalize">
+                        {status._id}
+                      </span>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      ${dept.amount.toLocaleString()} • {dept.approvalRate}%
-                      approved
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-900">
+                        {status.count} requests
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {formatCurrency(status.totalAmount)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -190,24 +294,34 @@ const Reports = () => {
               Monthly Trends
             </h2>
             <div className="space-y-4">
-              {reportData.monthlyTrends.map((month, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Calendar className="h-4 w-4 text-gray-400 mr-3" />
-                    <span className="text-sm font-medium text-gray-900">
-                      {month.month}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-900">
-                      {month.requests} requests
+              {reportData.monthlyTrends.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No monthly data available
+                </p>
+              ) : (
+                reportData.monthlyTrends.map((month: any, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <Calendar className="h-4 w-4 text-gray-400 mr-3" />
+                      <span className="text-sm font-medium text-gray-900">
+                        {getMonthName(month.month)} {month.year}
+                      </span>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      ${month.amount.toLocaleString()}
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-900">
+                        {month.totalRequests} requests
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {formatCurrency(month.totalAmount)} •{" "}
+                        {Math.round(month.approvalRate)}% approved
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -215,24 +329,26 @@ const Reports = () => {
         {/* Additional Metrics */}
         <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Performance Metrics
+            Team Overview
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">2.1 days</div>
-              <div className="text-sm text-gray-500">Average approval time</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {reportData.teamMembersCount}
+              </div>
+              <div className="text-sm text-gray-500">Team Members</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">94%</div>
-              <div className="text-sm text-gray-500">
-                On-time retirement rate
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(reportData.summary.approvedAmount)}
               </div>
+              <div className="text-sm text-gray-500">Approved Amount</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">$2,500</div>
-              <div className="text-sm text-gray-500">
-                Monthly budget utilization
+              <div className="text-2xl font-bold text-purple-600">
+                {formatCurrency(reportData.summary.pendingAmount)}
               </div>
+              <div className="text-sm text-gray-500">Pending Amount</div>
             </div>
           </div>
         </div>

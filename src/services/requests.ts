@@ -11,6 +11,7 @@ export interface CashAdvanceRequest {
     employeeId: string;
     department?: string;
     position?: string;
+    phone?: string; // ✅ ADD THIS
   };
   amount: number;
   purpose: string;
@@ -29,7 +30,10 @@ export interface CashAdvanceRequest {
     firstName: string;
     lastName: string;
   };
+  approvedAt?: string; // ✅ ADD THIS
+  rejectedBy?: string;
   rejectedReason?: string;
+  rejectedAt?: string; // ✅ ADD THIS
   createdAt: string;
   updatedAt: string;
 }
@@ -119,9 +123,12 @@ export const requestService = {
     };
   }> {
     try {
-      const response = await api.get<RequestsResponse>("/advances/my-requests", {
-        params
-      });
+      const response = await api.get<RequestsResponse>(
+        "/advances/my-requests",
+        {
+          params,
+        }
+      );
 
       // Transform the data to ensure compatibility
       const advances = response.data.data.advances.map((advance) => ({
@@ -131,7 +138,7 @@ export const requestService = {
 
       return {
         advances,
-        pagination: response.data.data.pagination
+        pagination: response.data.data.pagination,
       };
     } catch (error) {
       console.error("Error fetching user requests:", error);
@@ -142,7 +149,9 @@ export const requestService = {
   // Get a specific request by ID
   async getRequestById(requestId: string): Promise<CashAdvanceRequest> {
     try {
-      const response = await api.get<RequestResponse>(`/advances/my-requests/${requestId}`);
+      const response = await api.get<RequestResponse>(
+        `/advances/my-requests/${requestId}`
+      );
       return {
         ...response.data.data.advance,
         id: response.data.data.advance._id,
@@ -154,9 +163,14 @@ export const requestService = {
   },
 
   // Create a new cash advance request
-  async createRequest(requestData: CreateRequestData): Promise<CashAdvanceRequest> {
+  async createRequest(
+    requestData: CreateRequestData
+  ): Promise<CashAdvanceRequest> {
     try {
-      const response = await api.post<RequestResponse>("/advances", requestData);
+      const response = await api.post<RequestResponse>(
+        "/advances",
+        requestData
+      );
 
       return {
         ...response.data.data.advance,
@@ -169,7 +183,10 @@ export const requestService = {
   },
 
   // Retire a cash advance
-  async retireAdvance(advanceId: string, retirementData: RetirementData): Promise<CashAdvanceRequest> {
+  async retireAdvance(
+    advanceId: string,
+    retirementData: RetirementData
+  ): Promise<CashAdvanceRequest> {
     try {
       const response = await api.put<RequestResponse>(
         `/advances/${advanceId}/retire`,
@@ -207,9 +224,11 @@ export const requestService = {
   // Get recent requests for dashboard
   async getRecentRequests(): Promise<CashAdvanceRequest[]> {
     try {
-      const response = await api.get<RecentRequestsResponse>("/advances/staff/recent");
-      
-      return response.data.data.advances.map(advance => ({
+      const response = await api.get<RecentRequestsResponse>(
+        "/advances/staff/recent"
+      );
+
+      return response.data.data.advances.map((advance) => ({
         ...advance,
         id: advance._id,
       }));
@@ -222,9 +241,11 @@ export const requestService = {
   // Get pending requests for dashboard
   async getPendingRequests(): Promise<CashAdvanceRequest[]> {
     try {
-      const response = await api.get<RecentRequestsResponse>("/advances/staff/pending");
-      
-      return response.data.data.advances.map(advance => ({
+      const response = await api.get<RecentRequestsResponse>(
+        "/advances/staff/pending"
+      );
+
+      return response.data.data.advances.map((advance) => ({
         ...advance,
         id: advance._id,
       }));
@@ -238,19 +259,22 @@ export const requestService = {
   async getAdvancesForRetirement(): Promise<AdvanceForRetirement[]> {
     try {
       // We'll filter approved advances from the user's requests
-      const response = await api.get<RequestsResponse>("/advances/my-requests", {
-        params: { status: "approved" }
-      });
+      const response = await api.get<RequestsResponse>(
+        "/advances/my-requests",
+        {
+          params: { status: "approved" },
+        }
+      );
 
       const advances = response.data.data.advances
-        .filter(advance => advance.status === "approved")
-        .map(advance => ({
+        .filter((advance) => advance.status === "approved")
+        .map((advance) => ({
           _id: advance._id,
           id: advance._id,
           purpose: advance.purpose,
           amount: advance.amount,
           dateNeeded: advance.dateNeeded,
-          status: advance.status as "approved"
+          status: advance.status as "approved",
         }));
 
       return advances;
